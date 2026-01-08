@@ -1,0 +1,11 @@
+services:
+  agent:
+    image: golang:1.24
+    working_dir: /app
+    volumes:
+      - ../:/app
+    environment:
+      CERTKIT_API_BASE: https://local.certkit.io
+      ACCESS_KEY: DEV_ACCESS_KEY
+      SECRET_KEY: DEV_SECRET_KEY
+    command: bash -c "go build -o ./dist/certkit-agent ./cmd/certkit-agent && ./dist/certkit-agent run --config /app/dev/config.json"

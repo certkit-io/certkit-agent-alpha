@@ -1,0 +1,7 @@
+{
+  "api_base": "https://local.certkit.io",
+  "bootstrap": {
+    "access_key": "eric",
+    "secret_key": "jordan"
+  }
+}
