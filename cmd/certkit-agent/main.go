@@ -31,6 +31,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 )
 
 const (
@@ -41,6 +42,7 @@ const (
 )
 
 func main() {
+	log.SetOutput(os.Stdout)
 	log.SetFlags(log.LstdFlags | log.LUTC)
 
 	if len(os.Args) < 2 {
@@ -149,12 +151,22 @@ func runCmd(args []string) {
 	log.Printf("certkit-agent run starting (config=%s)", *configPath)
 	log.Printf("TODO: load config, enroll if needed, inventory, poll, apply, report status")
 
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
 	// Block until systemd tells us to stop.
 	sigCh := make(chan os.Signal, 2)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-	sig := <-sigCh
-	log.Printf("received signal %s, shutting down", sig)
+	for {
+		select {
+		case sig := <-sigCh:
+			log.Printf("received signal %s, shutting down", sig)
+			return
+		case <-ticker.C:
+			log.Printf("certkit-agent alive")
+		}
+	}
 
 	// TODO: graceful shutdown (cancel contexts, flush, etc.)
 }
