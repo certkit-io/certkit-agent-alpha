@@ -6,9 +6,6 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-: "${ACCESS_KEY:?ACCESS_KEY is required}"
-: "${SECRET_KEY:?SECRET_KEY is required}"
-
 OWNER="certkit-io"
 REPO="certkit-agent-alpha"
 
@@ -17,8 +14,29 @@ INSTALL_DIR="/usr/local/bin"
 ETC_DIR="/etc/certkit-agent"
 CONFIG_FILE="$ETC_DIR/config.json"
 
-TAG="${VERSION:-v0.0.1}"
 API_BASE="${CERTKIT_API_BASE:-https://app.certkit.io}"
+
+# Determine whether this is a first install (no config yet)
+FIRST_INSTALL=0
+if [[ ! -f "$CONFIG_FILE" ]]; then
+  FIRST_INSTALL=1
+  : "${ACCESS_KEY:?ACCESS_KEY is required for first install}"
+  : "${SECRET_KEY:?SECRET_KEY is required for first install}"
+fi
+
+# Resolve release tag (latest unless VERSION is set)
+if [[ -n "${VERSION:-}" ]]; then
+  TAG="$VERSION"
+else
+  TAG="$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+    "https://github.com/${OWNER}/${REPO}/releases/latest" | sed -n 's#.*/tag/##p')"
+  if [[ -z "$TAG" ]]; then
+    echo "Failed to determine latest release tag" >&2
+    exit 1
+  fi
+fi
+
+echo "Using release tag: ${TAG}"
 
 # Detect architecture
 arch="$(uname -m)"
@@ -33,7 +51,6 @@ esac
 
 ASSET_BIN="${BIN_NAME}_linux_${arch}"
 ASSET_SHA="${BIN_NAME}_SHA256SUMS.txt"
-
 BASE_URL="https://github.com/${OWNER}/${REPO}/releases/download/${TAG}"
 
 tmp="$(mktemp -d)"
@@ -54,12 +71,13 @@ echo "Verifying checksum"
 echo "Installing binary to ${INSTALL_DIR}/${BIN_NAME}"
 install -m 0755 "$tmp/${ASSET_BIN}" "${INSTALL_DIR}/${BIN_NAME}"
 
-echo "Writing config to ${CONFIG_FILE}"
 mkdir -p "$ETC_DIR"
 chmod 0755 "$ETC_DIR"
 
-umask 0077
-cat > "$CONFIG_FILE" <<EOF
+if [[ $FIRST_INSTALL -eq 1 ]]; then
+  echo "Writing new config to ${CONFIG_FILE}"
+  umask 0077
+  cat > "$CONFIG_FILE" <<EOF
 {
   "api_base": "${API_BASE}",
   "bootstrap": {
@@ -70,10 +88,15 @@ cat > "$CONFIG_FILE" <<EOF
   "desired_state": null
 }
 EOF
-chmod 0600 "$CONFIG_FILE"
+  chmod 0600 "$CONFIG_FILE"
+else
+  echo "Config already exists; skipping config creation.  Delete the existing config if you want a new one."
+fi
 
-echo "Installing systemd service via certkit-agent install"
+echo "Installing/updating systemd service via certkit-agent install"
 /usr/local/bin/${BIN_NAME} install --config "${CONFIG_FILE}"
 
-echo "✅ CertKit Agent installed and started"
-echo "   systemctl status certkit-agent.service"
+echo "Restarting certkit-agent.service"
+systemctl restart certkit-agent.service
+
+echo "✅ CertKit Agent installed/updated and running"
