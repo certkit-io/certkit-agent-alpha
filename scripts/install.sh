@@ -12,6 +12,11 @@ REPO="certkit-agent-alpha"
 BIN_NAME="certkit-agent"
 INSTALL_DIR="/usr/local/bin"
 
+FIRST_INSTALL=0
+if [[ ! -f "${INSTALL_DIR}/${BIN_NAME}" ]]; then
+  FIRST_INSTALL=1
+fi
+
 # Resolve release tag (latest unless VERSION set)
 if [[ -n "${VERSION:-}" ]]; then
   TAG="$VERSION"
@@ -62,7 +67,9 @@ install -m 0755 "$tmp/${ASSET_BIN}" "${INSTALL_DIR}/${BIN_NAME}"
 echo "Running certkit-agent install"
 /usr/local/bin/${BIN_NAME} install
 
-echo "Restarting certkit-agent.service"
-systemctl restart certkit-agent.service
+if [[ $FIRST_INSTALL -eq 0 ]]; then
+    echo "Restarting certkit-agent.service"
+    systemctl restart certkit-agent.service
+fi
 
 echo "✅ CertKit Agent installed/updated and running"

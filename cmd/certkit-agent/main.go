@@ -41,7 +41,7 @@ const (
 )
 
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	log.SetFlags(log.LstdFlags | log.LUTC)
 
 	if len(os.Args) < 2 {
 		usageAndExit()
