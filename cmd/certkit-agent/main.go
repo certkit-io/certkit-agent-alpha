@@ -26,8 +26,10 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 const (
@@ -134,7 +136,15 @@ func runCmd(args []string) {
 	// Stubbed out for now
 	log.Printf("certkit-agent run starting (config=%s)", *configPath)
 	log.Printf("TODO: load config, enroll if needed, inventory, poll, apply, report status")
-	select {} // keep running
+
+	// Block until systemd tells us to stop.
+	sigCh := make(chan os.Signal, 2)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	sig := <-sigCh
+	log.Printf("received signal %s, shutting down", sig)
+
+	// TODO: graceful shutdown (cancel contexts, flush, etc.)
 }
 
 // --- helpers ---
