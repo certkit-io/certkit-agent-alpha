@@ -20,6 +20,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -36,6 +37,7 @@ const (
 	defaultServiceName = "certkit-agent"
 	defaultUnitPath    = "/etc/systemd/system"
 	defaultConfigPath  = "/etc/certkit-agent/config.json"
+	defaultAPIBase     = "https://app.certkit.io"
 )
 
 func main() {
@@ -108,6 +110,16 @@ func installCmd(args []string) {
 		log.Fatalf("failed to create config dir: %v", err)
 	}
 
+	// Ensure config exists or create it
+	if _, err := os.Stat(*configPath); os.IsNotExist(err) {
+		log.Printf("Config not found, creating %s", *configPath)
+		if err := createInitialConfig(*configPath); err != nil {
+			log.Fatalf("failed to create config: %v", err)
+		}
+	} else {
+		log.Printf("Config already exists at %s", *configPath)
+	}
+
 	unitPath := filepath.Join(*unitDir, *serviceName+".service")
 	unitContent := renderSystemdUnit(exe, *configPath)
 
@@ -145,6 +157,42 @@ func runCmd(args []string) {
 	log.Printf("received signal %s, shutting down", sig)
 
 	// TODO: graceful shutdown (cancel contexts, flush, etc.)
+}
+
+func createInitialConfig(path string) error {
+	access := os.Getenv("ACCESS_KEY")
+	secret := os.Getenv("SECRET_KEY")
+
+	if access == "" || secret == "" {
+		return fmt.Errorf("ACCESS_KEY and SECRET_KEY are required for first install")
+	}
+
+	apiBase := os.Getenv("CERTKIT_API_BASE")
+	if apiBase == "" {
+		apiBase = defaultAPIBase
+	}
+
+	cfg := &Config{
+		APIBASE: apiBase,
+		Bootstrap: &BootstrapCreds{
+			AccessKey: access,
+			SecretKey: secret,
+		},
+		Agent:        nil,
+		DesiredState: nil,
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+
+	configBytes, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	configBytes = append(configBytes, '\n')
+
+	return writeFileAtomic(path, configBytes, 0o600)
 }
 
 // --- helpers ---
@@ -253,4 +301,22 @@ func isCmdNotFound(err error) bool {
 		return true
 	}
 	return false
+}
+
+type Config struct {
+	APIBASE      string          `json:"api_base"`
+	Bootstrap    *BootstrapCreds `json:"bootstrap,omitempty"`
+	Agent        *AgentCreds     `json:"agent,omitempty"`
+	DesiredState json.RawMessage `json:"desired_state,omitempty"`
+}
+
+type BootstrapCreds struct {
+	AccessKey string `json:"access_key"`
+	SecretKey string `json:"secret_key"`
+}
+
+type AgentCreds struct {
+	AgentID      string `json:"agent_id"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
 }
