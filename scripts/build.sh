@@ -27,7 +27,7 @@ build_one () {
   local goarch="$2"
   local ext="$3"
 
-  local out="${DIST_DIR}/bin/${APP_NAME}_${VERSION}_${goos}_${goarch}${ext}"
+  local out="${DIST_DIR}/bin/${APP_NAME}_${goos}_${goarch}${ext}"
 
   echo "==> Building $goos/$goarch -> $out"
   env CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
@@ -42,7 +42,7 @@ build_one windows amd64 ".exe"
 echo "==> Checksums"
 (
   cd "$DIST_DIR/bin"
-  sha256sum * > "../${APP_NAME}_${VERSION}_SHA256SUMS.txt"
+  sha256sum * > "../${APP_NAME}_SHA256SUMS.txt"
 )
 
 echo "==> Done. Outputs in: $DIST_DIR"

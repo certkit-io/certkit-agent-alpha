@@ -31,8 +31,8 @@ case "$arch" in
     ;;
 esac
 
-ASSET_BIN="${BIN_NAME}_${TAG}_linux_${arch}"
-ASSET_SHA="${BIN_NAME}_${TAG}_SHA256SUMS.txt"
+ASSET_BIN="${BIN_NAME}_linux_${arch}"
+ASSET_SHA="${BIN_NAME}_SHA256SUMS.txt"
 
 BASE_URL="https://github.com/${OWNER}/${REPO}/releases/download/${TAG}"
 
