@@ -20,7 +20,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -32,13 +31,15 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/certkit-io/certkit-agent-alpha/config"
+	"github.com/certkit-io/certkit-agent-alpha/utils"
 )
 
 const (
 	defaultServiceName = "certkit-agent"
 	defaultUnitPath    = "/etc/systemd/system"
 	defaultConfigPath  = "/etc/certkit-agent/config.json"
-	defaultAPIBase     = "https://app.certkit.io"
 )
 
 func main() {
@@ -115,7 +116,7 @@ func installCmd(args []string) {
 	// Ensure config exists or create it
 	if _, err := os.Stat(*configPath); os.IsNotExist(err) {
 		log.Printf("Config not found, creating %s", *configPath)
-		if err := createInitialConfig(*configPath); err != nil {
+		if err := config.CreateInitialConfig(*configPath); err != nil {
 			log.Fatalf("failed to create config: %v", err)
 		}
 	} else {
@@ -126,7 +127,7 @@ func installCmd(args []string) {
 	unitContent := renderSystemdUnit(exe, *configPath)
 
 	// Write unit file atomically.
-	if err := writeFileAtomic(unitPath, []byte(unitContent), 0o644); err != nil {
+	if err := utils.WriteFileAtomic(unitPath, []byte(unitContent), 0o644); err != nil {
 		log.Fatalf("failed to write unit file %s: %v", unitPath, err)
 	}
 
@@ -149,7 +150,14 @@ func runCmd(args []string) {
 
 	// Stubbed out for now
 	log.Printf("certkit-agent run starting (config=%s)", *configPath)
+
+	if _, err := config.LoadConfig(*configPath); err != nil {
+		log.Fatal(err)
+	}
+
 	log.Printf("TODO: load config, enroll if needed, inventory, poll, apply, report status")
+
+	log.Printf("API Base: %s", config.CurrentConfig.APIBASE)
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -169,42 +177,6 @@ func runCmd(args []string) {
 	}
 
 	// TODO: graceful shutdown (cancel contexts, flush, etc.)
-}
-
-func createInitialConfig(path string) error {
-	access := os.Getenv("ACCESS_KEY")
-	secret := os.Getenv("SECRET_KEY")
-
-	if access == "" || secret == "" {
-		return fmt.Errorf("ACCESS_KEY and SECRET_KEY are required for first install")
-	}
-
-	apiBase := os.Getenv("CERTKIT_API_BASE")
-	if apiBase == "" {
-		apiBase = defaultAPIBase
-	}
-
-	cfg := &Config{
-		APIBASE: apiBase,
-		Bootstrap: &BootstrapCreds{
-			AccessKey: access,
-			SecretKey: secret,
-		},
-		Agent:        nil,
-		DesiredState: nil,
-	}
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-
-	configBytes, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-	configBytes = append(configBytes, '\n')
-
-	return writeFileAtomic(path, configBytes, 0o600)
 }
 
 // --- helpers ---
@@ -258,38 +230,6 @@ func shellEscape(s string) string {
 	return `"` + s + `"`
 }
 
-func writeFileAtomic(path string, contents []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	base := filepath.Base(path)
-
-	tmp, err := os.CreateTemp(dir, "."+base+".tmp.*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-
-	cleanup := func(e error) error {
-		_ = tmp.Close()
-		_ = os.Remove(tmpName)
-		return e
-	}
-
-	if err := tmp.Chmod(perm); err != nil {
-		return cleanup(err)
-	}
-	if _, err := tmp.Write(contents); err != nil {
-		return cleanup(err)
-	}
-	if err := tmp.Sync(); err != nil {
-		return cleanup(err)
-	}
-	if err := tmp.Close(); err != nil {
-		return cleanup(err)
-	}
-
-	return os.Rename(tmpName, path)
-}
-
 func runCmdLogged(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	var out bytes.Buffer
@@ -313,22 +253,4 @@ func isCmdNotFound(err error) bool {
 		return true
 	}
 	return false
-}
-
-type Config struct {
-	APIBASE      string          `json:"api_base"`
-	Bootstrap    *BootstrapCreds `json:"bootstrap,omitempty"`
-	Agent        *AgentCreds     `json:"agent,omitempty"`
-	DesiredState json.RawMessage `json:"desired_state,omitempty"`
-}
-
-type BootstrapCreds struct {
-	AccessKey string `json:"access_key"`
-	SecretKey string `json:"secret_key"`
-}
-
-type AgentCreds struct {
-	AgentID      string `json:"agent_id"`
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
 }
