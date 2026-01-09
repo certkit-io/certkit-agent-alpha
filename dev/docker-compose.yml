@@ -1,6 +1,7 @@
 services:
   agent:
     image: golang:1.24
+    hostname: "eric-rocks"
     working_dir: /app
     volumes:
       - ../:/app
@@ -8,4 +9,4 @@ services:
       CERTKIT_API_BASE: https://local.certkit.io
       ACCESS_KEY: DEV_ACCESS_KEY
       SECRET_KEY: DEV_SECRET_KEY
-    command: bash -c "go build -o ./dist/certkit-agent ./cmd/certkit-agent && ./dist/certkit-agent run --config /app/dev/config.json"
+    command: bash -c "go build -ldflags '-X main.version=v1.2.3' -o ./dist/certkit-agent ./cmd/certkit-agent && ./dist/certkit-agent run --config /app/dev/config.json"

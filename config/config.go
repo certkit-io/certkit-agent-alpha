@@ -5,19 +5,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
+	"github.com/certkit-io/certkit-agent-alpha/auth"
 	"github.com/certkit-io/certkit-agent-alpha/utils"
 )
 
 var CurrentConfig Config
 
 type Config struct {
-	APIBASE      string          `json:"api_base"`
+	ApiBase      string          `json:"api_base"`
 	Bootstrap    *BootstrapCreds `json:"bootstrap,omitempty"`
 	Agent        *AgentCreds     `json:"agent,omitempty"`
 	DesiredState json.RawMessage `json:"desired_state,omitempty"`
+	Auth         *AuthCreds      `json:"auth,omitempty"`
+	Version      VersionInfo     `json:"omit"`
 }
 
 type BootstrapCreds struct {
@@ -29,6 +33,16 @@ type AgentCreds struct {
 	AgentID      string `json:"agent_id"`
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+}
+
+type AuthCreds struct {
+	KeyPair *auth.KeyPair `json:"key_pair"`
+}
+
+type VersionInfo struct {
+	Version string
+	Commit  string
+	Date    string
 }
 
 const (
@@ -49,7 +63,7 @@ func CreateInitialConfig(path string) error {
 	}
 
 	cfg := &Config{
-		APIBASE: apiBase,
+		ApiBase: apiBase,
 		Bootstrap: &BootstrapCreds{
 			AccessKey: access,
 			SecretKey: secret,
@@ -62,6 +76,10 @@ func CreateInitialConfig(path string) error {
 		return err
 	}
 
+	return SaveConfig(cfg, path)
+}
+
+func SaveConfig(cfg *Config, path string) error {
 	configBytes, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
@@ -71,7 +89,7 @@ func CreateInitialConfig(path string) error {
 	return utils.WriteFileAtomic(path, configBytes, 0o600)
 }
 
-func LoadConfig(path string) (Config, error) {
+func LoadConfig(path string, version VersionInfo) (Config, error) {
 	var cfg Config
 
 	if path == "" {
@@ -102,7 +120,34 @@ func LoadConfig(path string) (Config, error) {
 	// 	)
 	// }
 
+	if !hasKeyPair(&cfg) {
+		log.Print("Generating new keypair...")
+		keyPair, _ := auth.CreateNewKeyPair()
+		cfg.Auth = &AuthCreds{
+			KeyPair: keyPair,
+		}
+		SaveConfig(&cfg, path)
+	}
+
+	cfg.Version = version
+
 	CurrentConfig = cfg
 
 	return cfg, nil
+}
+
+func hasKeyPair(cfg *Config) bool {
+	if cfg == nil {
+		return false
+	}
+	if cfg.Auth == nil {
+		return false
+	}
+	if cfg.Auth.KeyPair == nil {
+		return false
+	}
+	if cfg.Auth.KeyPair.PublicKey == "" || cfg.Auth.KeyPair.PrivateKey == "" {
+		return false
+	}
+	return true
 }

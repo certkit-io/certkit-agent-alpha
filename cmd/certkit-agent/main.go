@@ -32,6 +32,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/certkit-io/certkit-agent-alpha/api"
 	"github.com/certkit-io/certkit-agent-alpha/config"
 	"github.com/certkit-io/certkit-agent-alpha/utils"
 )
@@ -41,6 +42,21 @@ const (
 	defaultUnitPath    = "/etc/systemd/system"
 	defaultConfigPath  = "/etc/certkit-agent/config.json"
 )
+
+var (
+	// Set via -ldflags "-X main.version=..."
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
+func Version() config.VersionInfo {
+	return config.VersionInfo{
+		Version: version,
+		Commit:  commit,
+		Date:    date,
+	}
+}
 
 func main() {
 	log.SetOutput(os.Stdout)
@@ -150,14 +166,15 @@ func runCmd(args []string) {
 
 	// Stubbed out for now
 	log.Printf("certkit-agent run starting (config=%s)", *configPath)
+	log.Printf("certkit-agent version: %s, commit: %s, date: %s", version, commit, date)
 
-	if _, err := config.LoadConfig(*configPath); err != nil {
+	if _, err := config.LoadConfig(*configPath, Version()); err != nil {
 		log.Fatal(err)
 	}
 
 	log.Printf("TODO: load config, enroll if needed, inventory, poll, apply, report status")
 
-	log.Printf("API Base: %s", config.CurrentConfig.APIBASE)
+	log.Printf("API Base: %s", config.CurrentConfig.ApiBase)
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -165,6 +182,15 @@ func runCmd(args []string) {
 	// Block until systemd tells us to stop.
 	sigCh := make(chan os.Signal, 2)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	response, err := api.InstallAgent()
+
+	if err != nil {
+		log.Printf("Error: %v", err)
+	} else {
+
+		log.Printf("Response: %v", response.AgentId)
+	}
 
 	for {
 		select {

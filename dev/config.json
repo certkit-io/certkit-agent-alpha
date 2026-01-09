@@ -1,7 +1,13 @@
 {
-  "api_base": "https://local.awesome.certkit.io",
+  "api_base": "http://host.docker.internal:1708",
   "bootstrap": {
     "access_key": "eric",
     "secret_key": "jordan"
+  },
+  "auth": {
+    "key_pair": {
+      "public_key": "K5FevjyJhjzmsKy1omdbTNSbqLMfoY25xzTD4CNfiCU",
+      "private_key": "P3TJZeXFzZAjKP4r9AhkBemXLwEVAtYEUIk64HxJ58ArkV6-PImGPOawrLWiZ1tM1Juosx-hjbnHNMPgI1-IJQ"
+    }
   }
 }
